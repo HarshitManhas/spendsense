@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "frontend",
+      "framework": "vite",
+      "installCommand": "npm ci",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist"
+    },
+    "api": {
+      "root": ".",
+      "framework": "fastapi",
+      "entrypoint": "src.ai_expense_scanner.api:app",
+      "functions": {
+        "src/ai_expense_scanner/api.py": {
+          "maxDuration": 60,
+          "excludeFiles": "{frontend,node_modules,ocr,data,artifacts,.tools,.venv,tests,docs}/**"
+        }
+      }
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": { "service": "api" } },
+    { "source": "/:path*", "destination": { "service": "web" } }
+  ],
+  "daemons": {
+    "ocr-worker": {
+      "root": ".",
+      "entrypoint": "Dockerfile.worker",
+      "instances": { "iad1": 1 },
+      "resources": { "requests": { "memory": "2Gi" } },
+      "terminationGracePeriodSeconds": 210
+    }
+  }
+}

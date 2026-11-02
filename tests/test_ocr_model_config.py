@@ -30,8 +30,13 @@ def test_extraction_forwards_model_directory_and_preserves_review(tmp_path, monk
     model = tmp_path / 'recognizer' if custom else None
     config = Settings(_env_file=None, ocr_recognition_model_dir=model)
     monkeypatch.setattr(extraction, 'settings', lambda: config)
+    original_resolve = Path.resolve
+    # Model the venv executable symlink that exists on Linux, including on Windows CI.
+    monkeypatch.setattr(Path, 'resolve', lambda path, *a, **kw:
+                        tmp_path / 'system-python' if path == config.ocr_python else original_resolve(path, *a, **kw))
 
     def run(command, **kwargs):
+        assert command[0] == str(config.ocr_python.absolute())
         if custom:
             assert command[command.index('--recognition-model-dir') + 1] == str(model.resolve())
         else:

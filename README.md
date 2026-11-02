@@ -17,7 +17,7 @@ Upload an image or PDF, review the suggested fields and items, approve the expen
 - **Categories:** manual selection. A category-training pipeline exists, but no category model is trained or serving yet.
 - **Custom CNN + Transformer:** research code is included; the full-receipt experiment failed validation and is not used by the app.
 
-The trained weights, datasets, credentials, database files and generated artifacts are **not included in Git**. A fresh clone can use the original pretrained PaddleOCR models; using the fine-tuned model requires its exported files or a new training run.
+The trained weights, datasets, credentials, database files and generated artifacts are **not included in Git**. The Vercel worker can load the trained export from private Atlas storage as described below. A fresh clone can use the original pretrained PaddleOCR models; using the fine-tuned model requires its exported files or a new training run.
 
 ## Run locally on Windows
 
@@ -88,6 +88,64 @@ The current Google Identity Services popup/callback flow needs **no client secre
 Real Google login and Atlas session creation have been verified in the development workspace. Set `ALLOW_DEV_LOGIN=false` for Google-only login. Production requires `APP_ENV=production`, an HTTPS frontend origin and a configured client ID; development logins are rejected outside development.
 
 Official references: [client setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid) and [server verification](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
+
+## Deploy the whole app on Vercel
+
+The root `vercel.json` defines one Vercel project: a Vite frontend, a Python 3.12 FastAPI service, and a Linux Python 3.11 OCR daemon. `/api/*` reaches FastAPI; other requests reach the frontend. MongoDB Atlas holds application data, receipt files and the private model export. Services and Daemons are currently beta features; the daemon runs in production only and consumes compute while running.
+
+### 1. Publish the trained recognizer privately
+
+From this workspace, with the intended Atlas database configured in the private `.env`, run:
+
+```powershell
+.venv/Scripts/python.exe -m ai_expense_scanner.model_store artifacts/paddle-finetune/run-v2/inference
+```
+
+This uploads only the three exported inference files to the separate `ocr_models` GridFS collection, verifies the stored SHA-256, and prints `OCR_MODEL_ID`. Repeating it with identical files reuses the same model. It does not upload datasets, credentials or receipts, and does not modify expenses. Keep the old model IDs for rollback. The worker downloads and verifies this exact export at startup. A missing or corrupt configured export stops startup rather than falling back to different weights.
+
+### 2. Configure one Vercel project
+
+Import `HarshitManhas/spendsense`, branch `main`, with **Root Directory `.` (repository root)**. Use the root configuration; do not import the frontend and OCR folders as three unrelated web projects. Clear old project-level build/install/output overrides. The frontend service already declares `npm ci`, `npm run build`, and `dist`; the API declares its entrypoint in the configuration.
+
+Set these **Production** environment variables in Vercel before deploying:
+
+```dotenv
+APP_ENV=production
+ALLOW_DEV_LOGIN=false
+FRONTEND_ORIGIN=https://spendsense-tan.vercel.app
+GOOGLE_CLIENT_ID=<your Google web client ID>
+MONGODB_URI=<your private Atlas connection string>
+MONGODB_DATABASE=spendsense
+EXTRACTION_PROVIDER=paddleocr
+REMOTE_WORKER=true
+MAX_UPLOAD_MB=4
+OCR_MODEL_ID=<the SHA-256 printed in step 1>
+```
+
+An ignored `.env.vercel` may already be prepared in the development workspace with these values and the published model ID; import it only into Vercel Production. It contains private credentials and must not be committed or shared. Use the actual frontend domain if different. Do not copy the Windows `.env` wholesale: `OCR_PYTHON` and `OCR_RUNNER` have Linux defaults in the Docker image, and `OCR_RECOGNITION_MODEL_DIR` is populated from the downloaded model. Keep secrets out of `VITE_*` variables. Give Atlas network access to the deployment's outbound traffic using the networking options available for your Vercel plan.
+
+Vercel sets `VERCEL=1`: the API enforces production authentication, caps uploads at 4 MiB, and discovers the worker through MongoDB heartbeats. The UI displays the API's actual file/page limits and rejects oversized files before uploading. Large rendered previews are converted to bounded JPEGs to fit Function responses; original files remain intact in GridFS.
+
+### 3. Configure Google and deploy
+
+Add the exact `FRONTEND_ORIGIN` to the Google OAuth web client's **Authorized JavaScript origins**. The existing popup sign-in needs no client secret or redirect URI. Set the appropriate External production audience in Google Auth Platform. Sign-in requests and cookies stay on the same origin through Vercel routing.
+
+Deploy the latest Git commit. Vercel builds `Dockerfile.worker`, preloads the official OCR models, and starts one 2 GiB worker in `iad1`. The worker then restores the trained recognizer and performs a startup OCR check before advertising readiness. Adjust the API/daemon region to suit the Atlas region and measure OCR memory/latency before increasing replicas. The existing MongoDB leases handle concurrent workers; no Redis service is required.
+
+### 4. Verify the deployment
+
+- `/api/auth/config` must return JSON, not 404 or HTML. Do not share its CSRF token.
+- `/api/health` must report `database: mongodb`, `extraction: paddleocr_available` and `maxUploadMb: 4`.
+- Daemon logs must show `Worker ready, provider paddleocr`. If the worker is absent or its heartbeat expires, uploads remain available for manual review; existing queued work waits for recovery.
+- Sign in with two Google accounts and check that neither can access the other's receipts or previews.
+- Upload a JPG and a PDF below 4 MiB, review the prediction, approve it, and check analytics. A file above 4 MiB must be rejected.
+- Restart the worker and verify queued receipts recover. Keep manual review enabled; OCR accuracy is not guaranteed.
+
+Keep production database credentials out of Preview deployments. Daemons do not run in Preview; use a separate staging database and explicit worker for staging OCR checks. Retain MongoDB backups and the model export, monitor failed jobs, and configure login/upload rate limits in the Vercel Firewall before broad public access.
+
+The root Python package installs API dependencies only. Dataset preparation and training dependencies remain in the `ml` extra. The OCR daemon has its own locked environment; it does not install PyTorch or training datasets.
+
+References: [Vercel Services](https://vercel.com/docs/services), [Daemons](https://vercel.com/docs/daemons), [Function limits](https://vercel.com/docs/functions/limitations).
 
 ## MongoDB Atlas and file storage
 
@@ -207,7 +265,7 @@ To return to the original pretrained recognizer, remove `OCR_RECOGNITION_MODEL_D
 Item rules preserve multiword descriptions and separate column gaps. Users can correct item quantities/prices; mismatches require confirmation. Receipt totals remain authoritative because taxes, fees and discounts can differ from the sum of item rows. Bare shared currency symbols such as `$` or `¥` may remain unresolved without additional evidence.
 
 ```powershell
-uv run --python 3.11 python -m ai_expense_scanner.ml.prepare_details
+uv run --python 3.11 --extra ml python -m ai_expense_scanner.ml.prepare_details
 uv run --python 3.11 python -m ai_expense_scanner.ml.train_categories --labels data/private/category-labels.jsonl --output artifacts/categories/pilot
 ```
 

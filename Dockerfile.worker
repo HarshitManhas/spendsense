@@ -1,0 +1,25 @@
+FROM python:3.11-slim-bookworm
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    OCR_PYTHON=/app/ocr/.venv/bin/python \
+    OCR_RUNNER=/app/ocr/run.py \
+    EXTRACTION_PROVIDER=paddleocr \
+    PATH=/app/.venv/bin:$PATH
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock ./
+RUN uv sync --python 3.11 --frozen --no-dev --no-install-project
+COPY ocr/pyproject.toml ocr/uv.lock ocr/.python-version ./ocr/
+RUN uv sync --project ocr --python 3.11 --frozen --no-dev
+COPY ocr/run.py ./ocr/run.py
+# Cache the official detector/recognizer at build time, before any receipt arrives.
+RUN touch /tmp/empty-requests.jsonl \
+    && /app/ocr/.venv/bin/python ocr/run.py --requests /tmp/empty-requests.jsonl --output /tmp/ocr-warmup \
+    && rm -rf /tmp/ocr-warmup /tmp/empty-requests.jsonl
+COPY README.md ./
+COPY src ./src
+RUN uv sync --python 3.11 --frozen --no-dev --no-editable
+CMD ["python", "-m", "ai_expense_scanner.worker"]

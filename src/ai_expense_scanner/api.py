@@ -45,7 +45,8 @@ async def database_error(request, exc):
 @app.get("/api/health")
 def health():
     database().command("ping")
-    return {"status": "ok", "database": "mongodb", "extraction": settings().extraction_provider + "_available" if ready() else "manual_only", "currencies": CURRENCIES}
+    return {"status": "ok", "database": "mongodb", "extraction": settings().extraction_provider + "_available" if ready() else "manual_only", "currencies": CURRENCIES,
+            "maxUploadMb": settings().max_upload_mb, "maxPdfPages": settings().max_pdf_pages}
 
 
 @app.post("/api/receipts", status_code=202, dependencies=[Depends(auth.csrf_guard)])
@@ -84,7 +85,8 @@ def preview(receipt_id: str, user=Depends(auth.current_user)):
     content = files().get(row["previewId"])
     if content.metadata["ownerId"] != user["id"]:
         raise HTTPException(404)
-    return Response(content.read(), media_type="image/png")
+    preview = content.read()
+    return Response(preview, media_type="image/jpeg" if preview.startswith(b'\xff\xd8') else "image/png")
 
 
 @app.patch("/api/receipts/{receipt_id}/review", dependencies=[Depends(auth.csrf_guard)])

@@ -32,3 +32,4 @@ frontend/.env.local
 coverage/
 test-results/
 .local-db/
+.vercel/

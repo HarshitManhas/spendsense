@@ -1,0 +1,14 @@
+**
+!Dockerfile.worker
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!src/**
+!ocr/
+!ocr/pyproject.toml
+!ocr/uv.lock
+!ocr/.python-version
+!ocr/run.py
+**/__pycache__/
+**/*.pyc

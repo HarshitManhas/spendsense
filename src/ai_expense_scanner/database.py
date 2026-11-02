@@ -21,6 +21,7 @@ def database():
     db.receipts.create_index([("status", 1), ("leaseUntil", 1)])
     db.receipts.create_index([("uploadId", 1), ("status", 1)])
     db.sessions.create_index("expiresAt", expireAfterSeconds=0)
+    db.workers.create_index('lastSeen', expireAfterSeconds=600)
     return db
 
 

@@ -17,7 +17,7 @@ def render_upload(content: bytes, max_pages: int):
                                 capture_output=True, timeout=25, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if result.returncode:
             raise ValueError("Use a valid JPG, PNG, or unencrypted PDF within the page and image limits")
-        return [(path.name, path.read_bytes()) for path in sorted(root.glob("page-*.png"))]
+        return [(path.name, path.read_bytes()) for path in sorted(root.glob("page-*"))]
 
 
 def render(root, max_pages):
@@ -42,6 +42,17 @@ def render(root, max_pages):
             image = ImageOps.exif_transpose(image).convert("RGB")
             image.thumbnail((2200, 3000))
             image.save(root / "page-00.png")
+    # A small compressed upload can expand beyond Vercel's response limit.
+    for path in root.glob('page-*.png'):
+        if path.stat().st_size > 4 * 1024**2:
+            with Image.open(path) as image:
+                image = image.convert('RGB')
+                destination = path.with_suffix('.jpg')
+                image.save(destination, quality=85)
+                while destination.stat().st_size > 4 * 1024**2:
+                    image.thumbnail((max(1, image.width // 2), max(1, image.height // 2)))
+                    image.save(destination, quality=85)
+            path.unlink()
 
 
 if __name__ == "__main__":

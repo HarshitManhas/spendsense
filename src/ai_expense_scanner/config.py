@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,11 +19,18 @@ class Settings(BaseSettings):
     ocr_python: Path = Path('ocr/.venv/Scripts/python.exe')
     ocr_runner: Path = Path('ocr/run.py')
     ocr_recognition_model_dir: Path | None = None
-    max_upload_mb: int = 10
+    remote_worker: bool = False
+    ocr_model_id: str = Field(default='', pattern=r'^([a-f0-9]{64})?$')
+    vercel: bool = False
+    max_upload_mb: int = Field(default=10, ge=1, le=10)
     max_pdf_pages: int = 5
 
     @model_validator(mode="after")
     def production_guard(self):
+        if self.vercel:
+            self.app_env = 'production'
+            self.max_upload_mb = min(self.max_upload_mb, 4)
+            self.remote_worker = True
         if self.app_env != "development":
             if self.allow_dev_login:
                 raise ValueError("Development login must be disabled outside development")

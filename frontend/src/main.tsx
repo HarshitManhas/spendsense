@@ -37,6 +37,8 @@ import {
 import {
   api,
   AuthConfig,
+  Health,
+  uploadReceipt,
   exponents,
   Fields,
   money,
@@ -288,7 +290,7 @@ function Login({
           )}
           {config?.googleClientId ? (
             <div ref={googleButton} className="google-button" />
-          ) : (
+          ) : config ? (
             <div className="setup-note">
               <ShieldCheck size={18} />
               <span>
@@ -296,7 +298,7 @@ function Login({
                 connected.
               </span>
             </div>
-          )}
+          ) : null}
           {config?.devLogin && (
             <div className="local-login">
               <span className="eyebrow">LOCAL DEVELOPMENT</span>
@@ -351,7 +353,7 @@ function Workspace({ user, logout }: { user: User; logout: () => void }) {
   const [receiptCursor, setReceiptCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<Receipt | null>(null);
   const [currency, setCurrency] = useState("INR");
-  const [health, setHealth] = useState<{ extraction: string } | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -375,7 +377,7 @@ function Workspace({ user, logout }: { user: User; logout: () => void }) {
       api<Summary>("/analytics/summary"),
       api<Page>("/receipts"),
       api<Page>(`/expenses?${query}`),
-      api<{ extraction: string }>("/health"),
+      api<Health>("/health"),
     ]);
     setSummary(s);
     setReceipts(r.items);
@@ -413,12 +415,8 @@ function Workspace({ user, logout }: { user: User; logout: () => void }) {
     let count = 0;
     try {
       for (const file of Array.from(files)) {
-        const data = new FormData();
-        data.append("file", file);
-        const result = await api<{ receipts: Receipt[] }>("/receipts", {
-          method: "POST",
-          body: data,
-        });
+        if (!health) throw new Error("Upload service is still loading. Please try again.");
+        const result = await uploadReceipt(file, health.maxUploadMb);
         count += result.receipts.length;
       }
       setMessage(
@@ -705,7 +703,7 @@ function Workspace({ user, logout }: { user: User; logout: () => void }) {
                   <div>
                     <h3>A receipt today. An insight tomorrow.</h3>
                     <p>Drop your receipts here, or upload an image or PDF.</p>
-                    <small>JPG, PNG, PDF · Up to 10 MB · 5 pages per PDF</small>
+                    <small>JPG, PNG, PDF{health && ` · Up to ${health.maxUploadMb} MB · ${health.maxPdfPages} pages per PDF`}</small>
                   </div>
                   <button
                     className="secondary"

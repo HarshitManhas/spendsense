@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from datetime import timedelta
 
 from PIL import Image
 
@@ -17,6 +18,17 @@ from .schemas import Draft
 
 
 def ready():
+    if settings().remote_worker:
+        from .database import database, now
+        return database().workers.find_one({
+            'provider': settings().extraction_provider,
+            'modelId': settings().ocr_model_id,
+            'lastSeen': {'$gt': now() - timedelta(seconds=240)},
+        }) is not None
+    return local_ready()
+
+
+def local_ready():
     config = settings()
     if config.extraction_provider == 'paddleocr':
         return (config.ocr_python.is_file() and config.ocr_runner.is_file()
@@ -58,7 +70,8 @@ def paddle_extract(content, original=None, page_number=1):
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
         requests = root / 'requests.jsonl'
         requests.write_text(json.dumps(request) + '\n', encoding='utf-8')
-        command = [str(config.ocr_python.resolve()), str(config.ocr_runner.resolve()),
+        # Resolving a Linux venv symlink selects system Python and loses its packages.
+        command = [str(config.ocr_python.absolute()), str(config.ocr_runner.resolve()),
                    '--requests', str(requests), '--output', str(root / 'output')]
         if config.ocr_recognition_model_dir is not None:
             command += ['--recognition-model-dir', str(config.ocr_recognition_model_dir.resolve())]
@@ -83,7 +96,7 @@ def paddle_extract(content, original=None, page_number=1):
 
 
 def load_predictor():
-    if not ready():
+    if not local_ready():
         raise ValueError('Selected extraction provider is not installed. Manual review remains available.')
     if settings().extraction_provider == 'paddleocr':
         return paddle_extract

@@ -49,6 +49,7 @@ export type AuthConfig = {
   devLogin: boolean;
   csrfToken: string;
 };
+export type Health = { extraction: string; maxUploadMb: number; maxPdfPages: number };
 export let csrf = "";
 export function setCsrf(value: string) {
   csrf = value;
@@ -77,12 +78,24 @@ export async function api<T>(
     if (response.status === 401 && !path.startsWith("/auth/"))
       window.dispatchEvent(new Event("session-expired"));
     throw new Error(
-      typeof error.detail === "string"
+      response.status === 413
+        ? "This file is too large. Choose a file within the displayed upload limit."
+        : path === "/auth/config" && response.status === 404
+        ? "The sign-in service is unavailable. Please try again later."
+        : typeof error.detail === "string"
         ? error.detail
         : "Check the entered values and try again.",
     );
   }
   return response.json();
+}
+
+export async function uploadReceipt(file: File, maxUploadMb: number) {
+  if (file.size > maxUploadMb * 1024 ** 2)
+    throw new Error(`Choose a receipt no larger than ${maxUploadMb} MB.`);
+  const data = new FormData();
+  data.append("file", file);
+  return api<{ receipts: Receipt[] }>("/receipts", { method: "POST", body: data });
 }
 
 export const exponents: Record<string, number> = {

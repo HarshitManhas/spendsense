@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Private data, generated artifacts and secrets
+data/
+artifacts/
+.env
+.env.*
+!.env.example
+!**/.env.example
+*service-account*.json
+firebase-adminsdk*.json
+.firebase/
+.emulator-data/
+.tools/
+*-debug.log
+*.log
+.pytest_cache/
+.ruff_cache/
+node_modules/
+frontend/dist/
+frontend/.env.local
+*.tsbuildinfo
+coverage/
+test-results/
+.local-db/

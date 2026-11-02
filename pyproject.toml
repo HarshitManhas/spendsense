@@ -1,0 +1,48 @@
+[project]
+name = "ai-expense-scanner"
+version = "0.1.0"
+description = "SpendSense: private receipt review with MongoDB and a from-scratch extraction model"
+readme = "README.md"
+authors = [
+    { name = "Harshit Manhas", email = "harshit.manhas.9@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=5.1.0",
+    "huggingface-hub>=2.4.0",
+    "pillow>=13.0.0",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "pydantic-settings>=2.7,<3",
+    "python-multipart>=0.0.20",
+    "pymongo>=4.11,<5",
+    "google-auth[requests]>=2.38,<3",
+    "pymupdf>=1.25,<2",
+]
+
+[project.optional-dependencies]
+ml = ["torch==2.11.0", "numpy>=2,<3"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'win32'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires a local MongoDB instance"]
+
+[project.scripts]
+ai-expense-scanner = "ai_expense_scanner:main"
+spendsense-data = "ai_expense_scanner.ml.prepare:main"
+spendsense-train = "ai_expense_scanner.ml.train:main"
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"

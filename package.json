@@ -1,0 +1,9 @@
+{
+  "name": "spendsense-development",
+  "private": true,
+  "scripts": {
+    "db": "node scripts/dev-mongo.mjs",
+    "test:integration": "uv run pytest -m integration"
+  },
+  "devDependencies": {"mongodb-memory-server-core": "^10.2.0"}
+}

@@ -1,0 +1,12 @@
+[project]
+name = "spendsense-ocr-baseline"
+version = "0.1.0"
+description = "Isolated local PaddleOCR runtime; independent of the custom PyTorch model"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "paddleocr==3.7.0",
+    "paddlepaddle==3.2.0",
+]
+
+[tool.uv]
+package = false

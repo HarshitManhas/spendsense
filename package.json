@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "db": "node scripts/dev-mongo.mjs",
-    "test:integration": "uv run pytest -m integration"
+    "test:integration": "uv run --python 3.11 pytest -m integration"
   },
   "devDependencies": {"mongodb-memory-server-core": "^10.2.0"}
 }

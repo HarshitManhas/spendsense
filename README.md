@@ -24,14 +24,14 @@ The trained weights, datasets, credentials, database files and generated artifac
 Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), Node.js 22.12+ (tested with Node 24), and MongoDB locally or in Atlas. Run commands from the repository root.
 
 ```powershell
-uv sync --extra ml
+uv sync --python 3.11 --extra ml
 uv sync --project ocr --python 3.11
 npm.cmd ci
 npm.cmd --prefix frontend ci
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-The main Python environment contains the API and PyTorch tooling. `ocr/.venv` isolates PaddleOCR 3.7.0 / PaddlePaddle 3.2.0 CPU inference from PyTorch. Initial setup/inference downloads public packages and model weights; receipt inference runs locally.
+The repository's `.python-version` selects Python 3.12 for Vercel. The explicit local setup commands above retain Python 3.11 for the evaluated training/OCR environment; do not recreate an existing training environment with the deployment version. The main Python environment contains the API and PyTorch tooling. `ocr/.venv` isolates PaddleOCR 3.7.0 / PaddlePaddle 3.2.0 CPU inference from PyTorch. Initial setup/inference downloads public packages and model weights; receipt inference runs locally.
 
 Set these values in the private root `.env`:
 
@@ -60,8 +60,8 @@ Start each service in a separate terminal:
 | Service | Command |
 |---|---|
 | Local MongoDB, if not using Atlas | `npm.cmd run db` |
-| API | `uv run uvicorn ai_expense_scanner.api:app --reload --reload-dir src --host 127.0.0.1 --port 8000` |
-| Extraction worker | `uv run python -m ai_expense_scanner.worker` |
+| API | `uv run --python 3.11 uvicorn ai_expense_scanner.api:app --reload --reload-dir src --host 127.0.0.1 --port 8000` |
+| Extraction worker | `uv run --python 3.11 python -m ai_expense_scanner.worker` |
 | Frontend | `npm.cmd --prefix frontend run dev` |
 
 The local database helper downloads an official MongoDB binary on first use, binds to loopback, and persists data in ignored `.local-db/`. Alternatively, use `docker compose up -d mongo`; do not run both on the same port. Atlas users do not need either local database process.
@@ -71,7 +71,7 @@ Open [SpendSense](http://localhost:5173/) and [API documentation](http://127.0.0
 Generate a fictional receipt for a workflow check:
 
 ```powershell
-uv run python scripts/create_sample_receipt.py
+uv run --python 3.11 python scripts/create_sample_receipt.py
 ```
 
 Upload `data/demo/sample-receipt.png`. New image/scanned-PDF uploads use the configured recognizer. Existing receipts are not automatically reprocessed; use **Re-extract** on a draft when appropriate. Review all predictions before approval.
@@ -104,8 +104,8 @@ ATLAS_PASSWORD='your database password'
 The helper percent-encodes the password and rejects incomplete credentials or disabled TLS verification:
 
 ```powershell
-uv run python scripts/connect_atlas.py
-uv run python scripts/connect_atlas.py --apply
+uv run --python 3.11 python scripts/connect_atlas.py
+uv run --python 3.11 python scripts/connect_atlas.py --apply
 ```
 
 The first command checks authentication and a temporary write/read/delete probe. `--apply` changes `.env` only after verification and preserves the first previous configuration in `.env.before-atlas`. Restart the API and worker afterward. It does **not** migrate existing local receipts, files or sessions; the development workspace deliberately started with an empty Atlas database.
@@ -115,7 +115,7 @@ Collections: `users`, `sessions`, `receipts`, `receipt_files.files`, and `receip
 To finish file cleanup after an interrupted deletion:
 
 ```powershell
-uv run python -m ai_expense_scanner.cleanup
+uv run --python 3.11 python -m ai_expense_scanner.cleanup
 ```
 
 This removes files for already-tombstoned receipts while retaining shared originals used by active pages. It does not delete active receipts.
@@ -125,7 +125,7 @@ This removes files for already-tombstoned receipts while retaining shared origin
 The local Hugging Face snapshots are expected at `data/cord` (CORD v1) and `data/sroie`. They are loaded with `datasets.load_from_disk`; they are not bundled in this repository. `download_dataset.py` downloads the SROIE snapshot if needed.
 
 ```powershell
-uv run --extra ml spendsense-data
+uv run --python 3.11 --extra ml spendsense-data
 ```
 
 Prepared receipt splits are **1,286 training / 225 validation / 461 test**. Fifteen exact-image duplicates were excluded from training/validation; test records were retained. SROIE's training-to-validation split groups normalized merchant names. Test image hashes and IDs do not overlap this project's training or validation data. The test set contains three internal duplicates, so results are also reported for 458 unique images.
@@ -207,8 +207,8 @@ To return to the original pretrained recognizer, remove `OCR_RECOGNITION_MODEL_D
 Item rules preserve multiword descriptions and separate column gaps. Users can correct item quantities/prices; mismatches require confirmation. Receipt totals remain authoritative because taxes, fees and discounts can differ from the sum of item rows. Bare shared currency symbols such as `$` or `¥` may remain unresolved without additional evidence.
 
 ```powershell
-uv run python -m ai_expense_scanner.ml.prepare_details
-uv run python -m ai_expense_scanner.ml.train_categories --labels data/private/category-labels.jsonl --output artifacts/categories/pilot
+uv run --python 3.11 python -m ai_expense_scanner.ml.prepare_details
+uv run --python 3.11 python -m ai_expense_scanner.ml.train_categories --labels data/private/category-labels.jsonl --output artifacts/categories/pilot
 ```
 
 The category trainer requires verified examples: at least two categories, 20 distinct receipts and five merchants per category. This is a mechanical minimum, not a quality guarantee. It uses merchant/item text, holds out merchants, and refuses unverified/test examples. CORD's field categories are not expense categories. Settings can export the signed-in user's approved category examples; keep private exports separate by owner. No category model is installed automatically.
@@ -218,9 +218,9 @@ The category trainer requires verified examples: at least two categories, 20 dis
 The PyTorch model and its training/evaluation pipeline remain available. An eight-receipt memorization experiment matched 18/18 known fields, but the full-data model produced repetitive outputs and scored **0/457 validation fields**. It is not the active OCR model, and limited-overfit checkpoints are rejected for app serving.
 
 ```powershell
-uv run --extra ml spendsense-train --limit 2 --epochs 1 --batch-size 2 --height 64 --width 64 --max-length 256 --output artifacts/custom-smoke
-uv run --extra ml spendsense-train --height 512 --width 256 --batch-size 2 --accumulate 2 --epochs 30 --supervise-unknowns --output artifacts/custom-full
-uv run --extra ml python -m ai_expense_scanner.ml.evaluate --checkpoint artifacts/custom-full/best.pt --manifest data/manifests/validation.jsonl --output artifacts/custom-full/evaluation.json
+uv run --python 3.11 --extra ml spendsense-train --limit 2 --epochs 1 --batch-size 2 --height 64 --width 64 --max-length 256 --output artifacts/custom-smoke
+uv run --python 3.11 --extra ml spendsense-train --height 512 --width 256 --batch-size 2 --accumulate 2 --epochs 30 --supervise-unknowns --output artifacts/custom-full
+uv run --python 3.11 --extra ml python -m ai_expense_scanner.ml.evaluate --checkpoint artifacts/custom-full/best.pt --manifest data/manifests/validation.jsonl --output artifacts/custom-full/evaluation.json
 ```
 
 These are research commands, not a recommendation to repeat the failed run unchanged. Text-recognition pretraining and better labeled data are needed. `--supervise-unknowns` teaches null abstentions for missing annotations, not proof that fields are absent. CUDA training supports mixed precision and epoch-boundary `--resume <run>/latest.pt`; preserve the original architecture and training settings when resuming. Checkpoints are never promoted automatically.
@@ -228,7 +228,7 @@ These are research commands, not a recommendation to repeat the failed run uncha
 ## Verification and maintenance
 
 ```powershell
-uv run --extra ml pytest -q
+uv run --python 3.11 --extra ml pytest -q
 npm.cmd --prefix frontend test
 npm.cmd --prefix frontend run build
 ```

@@ -1,137 +1,231 @@
 # SpendSense AI
 
-A receipt-to-expense web app using **React, FastAPI, MongoDB, and GridFS**, with a from-scratch PyTorch CNN + Transformer training pipeline.
+A receipt-to-expense app built with **React, TypeScript, FastAPI, MongoDB/GridFS, and PaddleOCR**. Google sign-in keeps each user's receipts and expenses separate.
 
-Upload an image/PDF → review the fields → approve → see the expense and charts update. Each account has its own data. Firebase was replaced with MongoDB at the user's request.
+Upload an image or PDF, review the suggested fields and items, approve the expense, and see spending summaries update. Amounts in different currencies are never added together.
 
-**Current state:** local OCR can suggest merchant, date, tax, total and experimental item rows for human review. Item quantities/prices and categories are editable and persist in MongoDB. A category-training pipeline is ready but needs verified labels; no category model is trained yet. The failed custom CNN checkpoint is not installed. Google sign-in has been verified in the development workspace; new installations need their own Google web client ID. Two labeled local test accounts are also available. See the [receipt details and training plan](docs/receipt-details-training-plan.md), [build status](docs/build-status.md) and [project plan](SpendSense_AI_Project_Plan.md).
+![SpendSense dashboard with fictional sample data](docs/screenshots/dashboard.jpg)
 
-Selectable PDFs now preserve currency signs and table columns before falling back to OCR. See the [currency/spacing fix and symbol-training results](docs/currency-and-layout-fix.md). The trained glyph classifier remains experimental; it is not enabled automatically.
+## Current implementation
 
-This workspace is connected to **MongoDB Atlas**, starting with an empty cloud expense database at the user's request. Earlier local receipts/files remain on this computer. See [Atlas connection and verification](docs/mongodb-atlas-setup.md). Refresh and sign in again after the database switch.
+- **Images and scanned PDFs:** local PaddleOCR detection and recognition, followed by receipt-field and item parsing. The evaluated receipt-trained recognizer is enabled in the development workspace.
+- **Selectable PDFs:** direct text and table extraction preserves currency signs and column positions before falling back to OCR.
+- **Review:** editable merchant, date, currency, tax, total, category, and item name/quantity/unit price/line total. Predictions require approval before contributing to analytics.
+- **Storage:** MongoDB stores users, sessions, receipt drafts and approved expenses; GridFS stores original files and previews. The development workspace uses MongoDB Atlas. Firebase is not used.
+- **Authentication:** Google Identity Services with server-side ID-token verification, nonce/CSRF checks and HttpOnly sessions. Receipt/file queries are scoped to the authenticated user.
+- **Analytics:** approved expenses, category/month summaries, filters and CSV export. Money uses decimal validation and integer minor units.
+- **Categories:** manual selection. A category-training pipeline exists, but no category model is trained or serving yet.
+- **Custom CNN + Transformer:** research code is included; the full-receipt experiment failed validation and is not used by the app.
+
+The trained weights, datasets, credentials, database files and generated artifacts are **not included in Git**. A fresh clone can use the original pretrained PaddleOCR models; using the fine-tuned model requires its exported files or a new training run.
 
 ## Run locally on Windows
 
-Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), and Node.js 22.12+ (tested with Node 24). Run the following from the repository root:
+Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), Node.js 22.12+ (tested with Node 24), and MongoDB locally or in Atlas. Run commands from the repository root.
 
 ```powershell
 uv sync --extra ml
+uv sync --project ocr --python 3.11
 npm.cmd ci
 npm.cmd --prefix frontend ci
-Copy-Item .env.example .env  # Only if .env does not already exist
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Start MongoDB in one terminal:
+The main Python environment contains the API and PyTorch tooling. `ocr/.venv` isolates PaddleOCR 3.7.0 / PaddlePaddle 3.2.0 CPU inference from PyTorch. Initial setup/inference downloads public packages and model weights; receipt inference runs locally.
 
-```powershell
-npm.cmd run db
+Set these values in the private root `.env`:
+
+```dotenv
+APP_ENV=development
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DATABASE=spendsense
+FRONTEND_ORIGIN=http://localhost:5173
+ALLOW_DEV_LOGIN=true
+GOOGLE_CLIENT_ID=
+EXTRACTION_PROVIDER=paddleocr
+OCR_PYTHON=ocr/.venv/Scripts/python.exe
+OCR_RUNNER=ocr/run.py
 ```
 
-The development helper downloads an official MongoDB 8.0.17 binary on first use (about 756 MB on Windows), binds to `127.0.0.1:27017`, and persists data under ignored `.local-db/`. It is a real MongoDB process, not a mock database. Stop with Ctrl+C; data remains for the next run. Do not run both this helper and Docker on the same port.
+To use the evaluated fine-tuned export, add this setting **only when its files are present**:
 
-Alternatively, with Docker Desktop running:
-
-```powershell
-docker compose up -d mongo
+```dotenv
+OCR_RECOGNITION_MODEL_DIR=artifacts/paddle-finetune/run-v2/inference
 ```
 
-Start the API in a second terminal:
+That directory must contain `inference.json`, `inference.pdiparams` and `inference.yml`. An incomplete configured export is treated as unavailable, rather than silently replaced with the original model. Omit the setting to use pretrained OCR. Restart the API and worker after changing `.env`.
 
-```powershell
-uv run --extra ml uvicorn ai_expense_scanner.api:app --reload --reload-dir src --host 127.0.0.1 --port 8000
-```
+Start each service in a separate terminal:
 
-Start the web app in a third terminal:
+| Service | Command |
+|---|---|
+| Local MongoDB, if not using Atlas | `npm.cmd run db` |
+| API | `uv run uvicorn ai_expense_scanner.api:app --reload --reload-dir src --host 127.0.0.1 --port 8000` |
+| Extraction worker | `uv run python -m ai_expense_scanner.worker` |
+| Frontend | `npm.cmd --prefix frontend run dev` |
 
-```powershell
-npm.cmd --prefix frontend run dev
-```
+The local database helper downloads an official MongoDB binary on first use, binds to loopback, and persists data in ignored `.local-db/`. Alternatively, use `docker compose up -d mongo`; do not run both on the same port. Atlas users do not need either local database process.
 
-Open [SpendSense](http://localhost:5173). Open Alex's local workspace to try the application; Sam's workspace has independent data. API documentation is at [localhost:8000/docs](http://127.0.0.1:8000/docs). State-changing requests require an Origin and CSRF header, so the web UI is the easiest way to exercise them.
+Open [SpendSense](http://localhost:5173/) and [API documentation](http://127.0.0.1:8000/docs). Development accounts Alex and Sam have separate workspaces; they do not simulate Google identities.
 
-Optional fictional receipt for testing:
+Generate a fictional receipt for a workflow check:
 
 ```powershell
 uv run python scripts/create_sample_receipt.py
 ```
 
-Upload `data/demo/sample-receipt.png`. The file is explicitly labeled fictional; it contains Sample Cafe, 2026-11-01, INR 349.00, and unspecified tax. Its values are not automatically predicted when no model is installed.
+Upload `data/demo/sample-receipt.png`. New image/scanned-PDF uploads use the configured recognizer. Existing receipts are not automatically reprocessed; use **Re-extract** on a draft when appropriate. Review all predictions before approval.
 
 ## Google sign-in
 
-1. Create an OAuth **web application client** in Google Cloud and configure the consent screen/test users as required.
-2. Add `http://localhost:5173` as an authorized JavaScript origin for local development.
-3. Set `GOOGLE_CLIENT_ID=...apps.googleusercontent.com` in `.env` and restart the API.
-4. Reload the web app. The Google button uses Google Identity Services; the API verifies the signed ID token, client ID, issuer, and login nonce before creating a session.
-5. Set `ALLOW_DEV_LOGIN=false` when testing only real Google identities. Production must use `APP_ENV=production`, HTTPS `FRONTEND_ORIGIN`, and a real client ID; development account access is rejected outside development.
+1. Create an OAuth **Web application** client in Google Cloud; configure branding, audience and test users as required.
+2. Add `http://localhost` and `http://localhost:5173` as authorized JavaScript origins.
+3. Put the public client ID in `.env` as `GOOGLE_CLIENT_ID=...apps.googleusercontent.com` and restart the API.
+4. Reload the app and choose **Continue with Google**.
 
-This flow needs a client ID, not a Google client secret. No Firebase project is used. Never paste MongoDB passwords or authentication tokens into tracked files. See [Google's server verification documentation](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
+The current Google Identity Services popup/callback flow needs **no client secret and no redirect URI**. The server verifies the ID token's signature, audience, issuer, verified email and login nonce. Ownership uses the Google subject ID, not a user-supplied email.
 
-## MongoDB and file storage
+Real Google login and Atlas session creation have been verified in the development workspace. Set `ALLOW_DEV_LOGIN=false` for Google-only login. Production requires `APP_ENV=production`, an HTTPS frontend origin and a configured client ID; development logins are rejected outside development.
 
-Set `MONGODB_URI` and `MONGODB_DATABASE` in `.env` to use a different server or Atlas. Give the database user access only to the application database and configure the network allowlist. Local defaults intentionally bind only to loopback.
+Official references: [client setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid) and [server verification](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
 
-Collections: `users`, `sessions`, `receipts`, `receipt_files.files`, `receipt_files.chunks`. An approved expense is embedded in its receipt document, making approval atomic even on standalone MongoDB. GridFS stores original uploads and page previews; browser previews always go through the authenticated API. See [MongoDB's GridFS guide](https://www.mongodb.com/docs/languages/python/pymongo-driver/current/crud/gridfs/).
+## MongoDB Atlas and file storage
 
-The app never sums different currencies. Amounts use Decimal validation and integer minor units. Only approved receipts appear in spending totals; rejected/draft/deleted receipts do not.
+Use an Atlas database user restricted to the application database, and configure the network access list for the application's connection. Keep credentials in ignored local environment files, never in frontend code or tracked documents.
 
-## Prepare existing CORD and SROIE data
+To check a connection before replacing the active configuration, create a private `.env.atlas`:
 
-The snapshots already in `data/cord` and `data/sroie` are loaded directly without downloading:
+```dotenv
+MONGODB_URI=mongodb+srv://<database-user>:<db_password>@<cluster-host>/?retryWrites=true&w=majority
+MONGODB_DATABASE=spendsense
+ATLAS_PASSWORD='your database password'
+```
+
+The helper percent-encodes the password and rejects incomplete credentials or disabled TLS verification:
+
+```powershell
+uv run python scripts/connect_atlas.py
+uv run python scripts/connect_atlas.py --apply
+```
+
+The first command checks authentication and a temporary write/read/delete probe. `--apply` changes `.env` only after verification and preserves the first previous configuration in `.env.before-atlas`. Restart the API and worker afterward. It does **not** migrate existing local receipts, files or sessions; the development workspace deliberately started with an empty Atlas database.
+
+Collections: `users`, `sessions`, `receipts`, `receipt_files.files`, and `receipt_files.chunks`. Approved expense values are embedded in the receipt document. Original files and previews are delivered through authenticated API routes.
+
+To finish file cleanup after an interrupted deletion:
+
+```powershell
+uv run python -m ai_expense_scanner.cleanup
+```
+
+This removes files for already-tombstoned receipts while retaining shared originals used by active pages. It does not delete active receipts.
+
+## Datasets and fine-tuning
+
+The local Hugging Face snapshots are expected at `data/cord` (CORD v1) and `data/sroie`. They are loaded with `datasets.load_from_disk`; they are not bundled in this repository. `download_dataset.py` downloads the SROIE snapshot if needed.
 
 ```powershell
 uv run --extra ml spendsense-data
 ```
 
-This writes ignored JSONL manifests, a training-only character vocabulary, and `data/manifests/audit.json`. Current split: **1,286 train / 225 validation / 461 test**, after excluding 15 duplicate images from training/validation. Original test rows are retained. SROIE train is grouped by normalized merchant before its validation holdout.
+Prepared receipt splits are **1,286 training / 225 validation / 461 test**. Fifteen exact-image duplicates were excluded from training/validation; test records were retained. SROIE's training-to-validation split groups normalized merchant names. Test image hashes and IDs do not overlap this project's training or validation data. The test set contains three internal duplicates, so results are also reported for 458 unique images.
 
-The local CORD copy is **v1**. CORD does not label merchant/date/currency; SROIE does not label tax/currency. Partial-label masks prevent missing annotations from being taught as absent fields. Ambiguous dates/amounts remain unsupervised. Near-duplicate/corruption audits and fully labeled currency examples remain necessary.
+CORD supplies some totals, taxes and item annotations, but not merchant/date/currency labels. SROIE supplies merchant/date/total annotations, but not tax/currency/item labels. Neither dataset provides food/travel/etc. expense categories. Missing annotations are not treated as correct extracted values or zero amounts.
 
-## Train and evaluate
+### PaddleOCR recognizer training
 
-On Windows, `uv sync --extra ml` installs the pinned PyTorch 2.11 CUDA 12.8 build from the official PyTorch index. CUDA execution has been verified on this machine's 4 GiB RTX 2050. Other platforms use PyPI; select a compatible build for their hardware. Training automatically uses CUDA when available.
+The completed experiment fine-tuned `en_PP-OCRv5_mobile_rec`; the detector stayed unchanged. Training used **40,268 real receipt-text crops plus 4,000 synthetic currency/amount lines** covering ₹, $, €, £ and ¥. Real crop labels came from annotations, not OCR pseudo-labels. Wide CORD column gaps were split, and exact crop duplicates were excluded across train/validation. Synthetic validation uses different font families.
 
-Smoke test (not an accuracy experiment):
-
-```powershell
-uv run --extra ml spendsense-train --limit 2 --epochs 1 --batch-size 2 --height 64 --width 64 --max-length 256 --output artifacts/smoke
-```
-
-Real-receipt overfit experiment, followed by free-running inspection:
+Training runs in a third, isolated environment. The source is pinned to PaddleOCR `v3.7.0`, commit `b03f46425e8ff4442b268ce449e3eef758146cd4`:
 
 ```powershell
-uv run --extra ml spendsense-train --limit 8 --epochs 100 --batch-size 2 --height 512 --width 256 --dropout 0 --learning-rate 0.001 --patience 100 --supervise-unknowns --output artifacts/overfit
-uv run --extra ml python -m ai_expense_scanner.ml.evaluate --checkpoint artifacts/overfit/best.pt --manifest artifacts/overfit/training-selection.jsonl --output artifacts/overfit/evaluation.json
+git clone --depth 1 --branch v3.7.0 https://github.com/PaddlePaddle/PaddleOCR.git .tools/PaddleOCR
+uv venv .tools/paddle-training --python 3.11
+uv pip install --python .tools/paddle-training/Scripts/python.exe -r ocr/training-requirements.txt --index https://pypi.org/simple --index https://www.paddlepaddle.org.cn/packages/stable/cu126/ --index-strategy unsafe-first-match
+.venv/Scripts/python.exe scripts/prepare_paddle_finetune.py
+.venv/Scripts/python.exe scripts/prepare_paddle_currency.py
 ```
 
-Initial full-data experiment, after completing the dataset/overfit gates:
+Download the [official pretrained training weights](https://paddle-model-ecology.bj.bcebos.com/paddlex/official_pretrained_model/en_PP-OCRv5_mobile_rec_pretrained.pdparams) to `artifacts/paddle-finetune/pretrained/en_PP-OCRv5_mobile_rec_pretrained.pdparams`. The runner verifies SHA-256 `e25c9536f39791dfbd2f005f7e0fbbc2652d35b79bae999740059d93fec8e950` (70,070,474 bytes).
 
 ```powershell
-uv run --extra ml spendsense-train --height 512 --width 256 --batch-size 2 --accumulate 2 --epochs 30 --supervise-unknowns --output artifacts/full
-uv run --extra ml python -m ai_expense_scanner.ml.evaluate --checkpoint artifacts/full/best.pt --manifest data/manifests/validation.jsonl --output artifacts/full/evaluation.json
+.tools/paddle-training/Scripts/python.exe scripts/run_paddle_finetune.py --output artifacts/paddle-finetune/run-v2
 ```
 
-The overfit subset alternates sources, is saved as `training-selection.jsonl`, and uses itself for validation. It measures memorization only. Full training uses the separate 225-receipt validation set. CUDA runs use FP16 mixed precision with gradient scaling by default (`--no-amp` disables it). Each run writes `status.json`, `metrics.jsonl`, `run.json`, `best.pt`, and an epoch-boundary `latest.pt` checkpoint. To resume, repeat the same command with the desired total epoch count and `--resume <output>/latest.pt`; keep model dimensions, batch size, accumulation, seed, learning rate, and the supervision policy unchanged.
+Use a fresh output directory; existing datasets/runs are protected from overwrite. The command above is for a fresh installation. This workspace already contains `run-v2`. An optional `--baseline-run` can reuse a matching completed pretrained evaluation after settings/data/weight checks.
 
-The original fully masked unknown-value objective failed free generation: it never learned the literal `null` placeholders required by the JSON format. The current experiment explicitly enables `--supervise-unknowns`, teaching `null` as **abstention because an answer is unannotated or ambiguous**, not proof that a receipt field is absent. It does not replace unknown tax with zero or guess dates/currencies. This can bias the model to leave fields blank according to dataset annotation patterns; a fully annotated target-domain validation set remains necessary. Accuracy counts only genuinely labeled values; unknown placeholders never count as correct extracted fields. Currency has no labeled training examples and requires human entry.
+The run used three epochs, batch size 8, Adam/cosine decay with maximum learning rate 0.00002, 48×320 inputs, the original character dictionary, and modest augmentation on a 4 GB RTX 2050. Epoch 3 was selected using real validation crops. Paddle 3.2.2 emitted a cuDNN version warning in this Windows environment; GPU training, export and subsequent CPU inference nevertheless completed. Other hardware needs its own runtime verification.
 
-To train and automatically evaluate validation after completion, use `uv run --extra ml python scripts/train_full.py --output artifacts/full --epochs 30`. Add `--resume` to restart this wrapper from its latest completed epoch. It never evaluates the test split or installs a serving model automatically.
+The runner evaluates both recognizers, trains, selects the best checkpoint, evaluates the synthetic diagnostic, and exports `inference/`. It does not activate weights in the app automatically. Keep `status.json`, `config.yml`, `provenance.json`, logs, checkpoints and reports together under the ignored output directory.
 
-For runs under `artifacts/runs`, inspect progress with `powershell -File scripts/training_status.ps1`. `ProcessAlive: False` with a running state means the process stopped unexpectedly; resume from the latest completed epoch. Keep the computer awake while a local run is active.
+### Evaluation results
 
-Use the test manifest only after selecting the model and preprocessing. These commands do not promise useful accuracy. A randomly initialized model trained on this small dataset may require substantially more data and experimentation. `--limit` checkpoints are flagged as tiny-overfit-only and cannot serve the app.
+Results from 2 November 2026 compare the original recognizer with the fine-tuned recognizer. Full-receipt evaluations keep the detector, image inputs, frozen field parser and normalization identical.
 
-To serve an evaluated full checkpoint, set `EXTRACTION_PROVIDER=checkpoint` and `MODEL_PATH`, then start the worker separately:
+| Evaluation | Original | Fine-tuned |
+|---|---:|---:|
+| Validation: 225 receipts, 457 labeled fields | 359/457 (78.56%) | 371/457 (81.18%) |
+| Held-out test: 461 records, 962 labeled fields | 674/962 (70.06%) | 715/962 (74.32%) |
+| Deduplicated test: 458 images, 953 labeled fields | 669/953 (70.20%) | 710/953 (74.50%) |
+
+On the full test set, **54 fields improved and 13 regressed**, for 41 additional correct values. Both models completed all 461 records with zero OCR failures. The paired receipt bootstrap on unique images gives an approximate 95% interval of **+2.70 to +5.97 percentage points** for the improvement (2,000 resamples; seed 42).
+
+| Test field | Original correct | Fine-tuned correct |
+|---|---:|---:|
+| CORD total | 72/91 | 75/91 |
+| CORD tax | 24/39 | 28/39 |
+| SROIE merchant | 223/361 | 243/361 |
+| SROIE date | 168/174 | 171/174 |
+| SROIE total | 187/297 | 198/297 |
+
+Separate text-crop exact accuracy, including case, spaces and punctuation, improved **61.12% → 88.54%**. Synthetic currency-text accuracy improved **67.36% → 99.31%**. The upstream Windows crop evaluator skips its final batch: these scores cover **8,184/8,194 real validation crops** and **576/600 synthetic samples**. The per-receipt evaluation processes every image and is not affected by that behavior.
+
+These figures do **not** establish real-receipt currency accuracy, item-row accuracy, expense-category accuracy, or production latency. Public PaddleOCR pretraining overlap with CORD/SROIE is unknown; missing/noisy annotations and near duplicates remain limitations. The 81.18% validation result must not be presented as the held-out test result or expected customer accuracy. Human review remains necessary.
+
+To reproduce a complete-receipt comparison with new output directories:
 
 ```powershell
-uv run --extra ml python -m ai_expense_scanner.worker
+.venv/Scripts/python.exe scripts/prepare_ocr_inputs.py --manifest data/manifests/test.jsonl --output artifacts/ocr/test-new
+ocr/.venv/Scripts/python.exe ocr/run.py --requests artifacts/ocr/test-new/requests.jsonl --output artifacts/ocr/test-original-new --threads 2
+ocr/.venv/Scripts/python.exe ocr/run.py --requests artifacts/ocr/test-new/requests.jsonl --output artifacts/ocr/test-trained-new --threads 2 --recognition-model-dir artifacts/paddle-finetune/run-v2/inference
+.venv/Scripts/python.exe -m ai_expense_scanner.ocr_evaluate --inputs artifacts/ocr/test-new --run artifacts/ocr/test-original-new
+.venv/Scripts/python.exe -m ai_expense_scanner.ocr_evaluate --inputs artifacts/ocr/test-new --run artifacts/ocr/test-trained-new
 ```
 
-In checkpoint mode, uploads use manual review if no checkpoint exists and otherwise queue for the worker. The custom-model worker loads the model once, uses revision/lease guards, and leaves predictions awaiting approval. Copying a file to `MODEL_PATH` is not evidence of model quality; keep its evaluation report alongside it. For local OCR instead, install `ocr/.venv`, set `EXTRACTION_PROVIDER=paddleocr` and start the same worker. See [setup, item targets and category labeling](docs/receipt-details-training-plan.md).
+Use the validation manifest during development; reserve a new holdout for future changes now that this test set has been evaluated. The CLI's `--resume` only accepts matching inputs, settings, runner code and model hashes. Windows status-file replacement retries transient locks while preserving the previous file if retries fail.
 
-## Verification
+Local evidence includes `artifacts/ocr/test/comparison.json`, the recovered test runs' `evaluation.json`/`predictions.jsonl`, and `artifacts/paddle-finetune/run-v2/receipt-comparison.json`. The test interrupted by Windows file locks was resumed from hash-verified cached predictions; the recognition settings, weights and field parser were unchanged. These generated files are not committed.
 
-The separate pretrained OCR baseline lives in [`ocr/README.md`](ocr/README.md). It runs local PaddleOCR in its own CPU environment, then applies receipt-field rules and the same labeled-field evaluation used for the custom model. It matched **359/457 labeled fields (78.6%)** on 225 validation receipts; see [results and limitations](docs/ocr-baseline-results.md). The benchmark preserves OCR text, geometry, scores and evidence. It is now available as an explicit app provider, independent of the custom CNN + Transformer. New experimental item rules do not change the frozen five-field benchmark and have no held-out accuracy score yet.
+### App activation and rollback
+
+The evaluated export is enabled in this development workspace through `OCR_RECOGNITION_MODEL_DIR`. A real upload through the frontend proxy and worker verified model fingerprint `document-layout-v2+currency-v2:5ed79ba5f37b9913`, `pending_review` status, date, total and currency. The fictional sample's merchant was misidentified, so this was a workflow/model-selection check, not a claim of perfect extraction. The test receipt was removed and no expense approved.
+
+To return to the original pretrained recognizer, remove `OCR_RECOGNITION_MODEL_DIR` from `.env` and restart the API and worker. Review and approval remain required with either model.
+
+### Items and expense categories
+
+Item rules preserve multiword descriptions and separate column gaps. Users can correct item quantities/prices; mismatches require confirmation. Receipt totals remain authoritative because taxes, fees and discounts can differ from the sum of item rows. Bare shared currency symbols such as `$` or `¥` may remain unresolved without additional evidence.
+
+```powershell
+uv run python -m ai_expense_scanner.ml.prepare_details
+uv run python -m ai_expense_scanner.ml.train_categories --labels data/private/category-labels.jsonl --output artifacts/categories/pilot
+```
+
+The category trainer requires verified examples: at least two categories, 20 distinct receipts and five merchants per category. This is a mechanical minimum, not a quality guarantee. It uses merchant/item text, holds out merchants, and refuses unverified/test examples. CORD's field categories are not expense categories. Settings can export the signed-in user's approved category examples; keep private exports separate by owner. No category model is installed automatically.
+
+### Custom CNN + Transformer research
+
+The PyTorch model and its training/evaluation pipeline remain available. An eight-receipt memorization experiment matched 18/18 known fields, but the full-data model produced repetitive outputs and scored **0/457 validation fields**. It is not the active OCR model, and limited-overfit checkpoints are rejected for app serving.
+
+```powershell
+uv run --extra ml spendsense-train --limit 2 --epochs 1 --batch-size 2 --height 64 --width 64 --max-length 256 --output artifacts/custom-smoke
+uv run --extra ml spendsense-train --height 512 --width 256 --batch-size 2 --accumulate 2 --epochs 30 --supervise-unknowns --output artifacts/custom-full
+uv run --extra ml python -m ai_expense_scanner.ml.evaluate --checkpoint artifacts/custom-full/best.pt --manifest data/manifests/validation.jsonl --output artifacts/custom-full/evaluation.json
+```
+
+These are research commands, not a recommendation to repeat the failed run unchanged. Text-recognition pretraining and better labeled data are needed. `--supervise-unknowns` teaches null abstentions for missing annotations, not proof that fields are absent. CUDA training supports mixed precision and epoch-boundary `--resume <run>/latest.pt`; preserve the original architecture and training settings when resuming. Checkpoints are never promoted automatically.
+
+## Verification and maintenance
 
 ```powershell
 uv run --extra ml pytest -q
@@ -139,18 +233,20 @@ npm.cmd --prefix frontend test
 npm.cmd --prefix frontend run build
 ```
 
-MongoDB integration tests use a unique `spendsense_test_*` database and remove only that database afterward. Start `npm run db` before running them; otherwise they are reported as skipped. Unit/data/model tests do not require MongoDB.
+MongoDB integration tests create unique `spendsense_test_*` databases and remove only those fixtures. Start the local database helper before running them; otherwise they are skipped. Tests do not use the app's Atlas database by default.
 
-Deletion recovery:
+Latest verification: **62 Python tests and 3 frontend tests passed**, and the TypeScript/Vite production build succeeded. Vite still reports a bundle-size advisory for the roughly 620 kB JavaScript bundle.
 
-```powershell
-uv run python -m ai_expense_scanner.cleanup
-```
+| Location | Purpose |
+|---|---|
+| `frontend/src/` | Upload, review, expenses, analytics and settings UI |
+| `src/ai_expense_scanner/` | API, authentication, storage, parsing and worker |
+| `src/ai_expense_scanner/ml/` | Custom-model/data/category research tools |
+| `ocr/` | Isolated PaddleOCR runtime and training dependency pins |
+| `scripts/` | Setup, dataset preparation, training and evaluation commands |
+| `tests/` | Unit and MongoDB integration checks |
+| `data/`, `artifacts/`, `.tools/` | Ignored datasets, local weights, evidence and training environments |
 
-This removes GridFS data for already-tombstoned receipts, preserving shared originals still used by other pages. It does not delete active receipts.
+Before production, add rate limits and streaming request limits, improve worker monitoring/throughput, reconcile abandoned uploads, and implement account deletion, backups and retention. OCR currently reloads models per receipt and has a 180-second subprocess deadline; readiness is not a worker heartbeat. Production cookies/origins and real target-domain receipts need separate deployment testing.
 
-## Before production
-
-Complete rate limiting, a streaming request-body cap at the proxy/server boundary, abandoned-upload reconciliation, account/data deletion, retention/backup policy, worker operational limits, Google login verification, and a measured full-model evaluation. The current build has basic validation, ownership checks, CSRF/session protection, decoding limits, and private previews, but is not a production release.
-
-Data, checkpoints, `.env`, database files, and build outputs are ignored. Do not add them to Git. The original dataset snapshots have not been modified.
+This is a working development application with measured model limitations, not a production accuracy guarantee. Keep secrets and private receipt data out of Git.

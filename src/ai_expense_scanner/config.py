@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     extraction_provider: Literal['checkpoint', 'paddleocr'] = 'checkpoint'
     ocr_python: Path = Path('ocr/.venv/Scripts/python.exe')
     ocr_runner: Path = Path('ocr/run.py')
+    ocr_recognition_model_dir: Path | None = None
     max_upload_mb: int = 10
     max_pdf_pages: int = 5
 

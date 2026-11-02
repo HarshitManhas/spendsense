@@ -12,7 +12,15 @@ import traceback
 def write_json(path, value):
     temporary = path.with_suffix(path.suffix + '.tmp')
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
-    temporary.replace(path)
+    for attempt in range(10):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError:
+            # Windows readers and sync clients can briefly lock the destination.
+            if attempt == 9:
+                raise
+            time.sleep(.2)
 
 
 def main():
@@ -22,6 +30,8 @@ def main():
     p.add_argument('--threads', type=int, default=4)
     p.add_argument('--no-mkldnn', action='store_true')
     p.add_argument('--resume', action='store_true')
+    p.add_argument('--recognition-model-dir', type=Path,
+                   help='Explicit experimental recognizer; default keeps the deployed pretrained model')
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     raw_dir = args.output / 'raw'; raw_dir.mkdir(exist_ok=True)
@@ -32,6 +42,12 @@ def main():
               'use_textline_orientation': False, 'device': 'cpu', 'cpu_threads': args.threads,
               'enable_mkldnn': not args.no_mkldnn, 'text_det_limit_side_len': 1280,
               'text_det_limit_type': 'max', 'text_rec_score_thresh': 0.0}
+    if args.recognition_model_dir:
+        directory = args.recognition_model_dir.resolve()
+        for filename in ('inference.json', 'inference.pdiparams', 'inference.yml'):
+            if not (directory / filename).is_file():
+                raise ValueError(f'Incomplete exported recognizer: missing {filename}')
+        config['text_recognition_model_dir'] = str(directory)
     metadata = {'requests_sha256': hashlib.sha256(args.requests.read_bytes()).hexdigest(),
                 'config': config, 'paddleocr': version('paddleocr'), 'paddlepaddle': version('paddlepaddle'),
                 'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
@@ -56,6 +72,8 @@ def main():
         model_files = {}
         for name in (config['text_detection_model_name'], config['text_recognition_model_name']):
             directory = Path(CACHE_DIR) / 'official_models' / name
+            if name == config['text_recognition_model_name'] and args.recognition_model_dir:
+                directory = args.recognition_model_dir.resolve()
             for filename in ('inference.json', 'inference.pdiparams', 'inference.yml'):
                 path = directory / filename
                 if path.is_file():

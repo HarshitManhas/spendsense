@@ -19,7 +19,10 @@ from .schemas import Draft
 def ready():
     config = settings()
     if config.extraction_provider == 'paddleocr':
-        return config.ocr_python.is_file() and config.ocr_runner.is_file()
+        return (config.ocr_python.is_file() and config.ocr_runner.is_file()
+                and (config.ocr_recognition_model_dir is None or all(
+                    (config.ocr_recognition_model_dir / name).is_file()
+                    for name in ('inference.json', 'inference.pdiparams', 'inference.yml'))))
     return config.model_path.is_file()
 
 
@@ -55,9 +58,12 @@ def paddle_extract(content, original=None, page_number=1):
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
         requests = root / 'requests.jsonl'
         requests.write_text(json.dumps(request) + '\n', encoding='utf-8')
+        command = [str(config.ocr_python.resolve()), str(config.ocr_runner.resolve()),
+                   '--requests', str(requests), '--output', str(root / 'output')]
+        if config.ocr_recognition_model_dir is not None:
+            command += ['--recognition-model-dir', str(config.ocr_recognition_model_dir.resolve())]
         with (root / 'runner.log').open('w', encoding='utf-8') as log:
-            subprocess.run([str(config.ocr_python.resolve()), str(config.ocr_runner.resolve()),
-                            '--requests', str(requests), '--output', str(root / 'output')],
+            subprocess.run(command,
                            stdout=log, stderr=subprocess.STDOUT, timeout=180, check=True,
                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         result = json.loads((root / 'output/raw/0000.json').read_text(encoding='utf-8'))
@@ -66,7 +72,7 @@ def paddle_extract(content, original=None, page_number=1):
         parsed = extract_document(result['lines'], width, height)
         fields = Draft(**parsed['fields'], items=parsed['items'])
         missing = [key for key in ('merchant', 'date', 'total', 'currency') if not getattr(fields, key)]
-        warnings = ['Local pretrained OCR with receipt rules. Check every value before approval.',
+        warnings = ['Local OCR with receipt rules. Check every value before approval.',
                     'Choose the expense category; no trained category model is installed.',
                     *parsed['warnings']]
         if missing:

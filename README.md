@@ -112,7 +112,7 @@ Set these **Production** environment variables in Vercel before deploying:
 ```dotenv
 APP_ENV=production
 ALLOW_DEV_LOGIN=false
-FRONTEND_ORIGIN=https://spendsense-tan.vercel.app
+FRONTEND_ORIGIN=https://spendsense-ivory.vercel.app
 GOOGLE_CLIENT_ID=<your Google web client ID>
 MONGODB_URI=<your private Atlas connection string>
 MONGODB_DATABASE=spendsense

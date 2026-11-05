@@ -1,0 +1,269 @@
+{
+  "evaluation_date": "2026-11-02",
+  "comparison": {
+    "full_test": {
+      "receipts": 461,
+      "labeled": 962,
+      "baseline_correct": 674,
+      "finetuned_correct": 715,
+      "baseline_accuracy": 0.7006237006237006,
+      "finetuned_accuracy": 0.7432432432432432,
+      "corrected_fields": 54,
+      "regressed_fields": 13,
+      "fields": {
+        "cord.total": {
+          "labeled": 91,
+          "baseline_correct": 72,
+          "finetuned_correct": 75
+        },
+        "cord.tax": {
+          "labeled": 39,
+          "baseline_correct": 24,
+          "finetuned_correct": 28
+        },
+        "sroie.merchant": {
+          "labeled": 361,
+          "baseline_correct": 223,
+          "finetuned_correct": 243
+        },
+        "sroie.date": {
+          "labeled": 174,
+          "baseline_correct": 168,
+          "finetuned_correct": 171
+        },
+        "sroie.total": {
+          "labeled": 297,
+          "baseline_correct": 187,
+          "finetuned_correct": 198
+        }
+      }
+    },
+    "deduplicated_test": {
+      "receipts": 458,
+      "labeled": 953,
+      "baseline_correct": 669,
+      "finetuned_correct": 710,
+      "baseline_accuracy": 0.70199370409234,
+      "finetuned_accuracy": 0.74501573976915,
+      "corrected_fields": 54,
+      "regressed_fields": 13,
+      "fields": {
+        "cord.total": {
+          "labeled": 91,
+          "baseline_correct": 72,
+          "finetuned_correct": 75
+        },
+        "cord.tax": {
+          "labeled": 39,
+          "baseline_correct": 24,
+          "finetuned_correct": 28
+        },
+        "sroie.merchant": {
+          "labeled": 358,
+          "baseline_correct": 221,
+          "finetuned_correct": 241
+        },
+        "sroie.date": {
+          "labeled": 171,
+          "baseline_correct": 165,
+          "finetuned_correct": 168
+        },
+        "sroie.total": {
+          "labeled": 294,
+          "baseline_correct": 187,
+          "finetuned_correct": 198
+        }
+      }
+    },
+    "excluded_duplicate_ids": [
+      "sroie:test:12",
+      "sroie:test:76",
+      "sroie:test:358"
+    ],
+    "paired_receipt_bootstrap_delta_95_interval": [
+      0.02702702702702703,
+      0.05968586387434555
+    ],
+    "bootstrap_replicates": 2000,
+    "bootstrap_seed": 42,
+    "ocr_errors": {
+      "baseline": 0,
+      "finetuned": 0
+    },
+    "all_known_fields_correct": {
+      "baseline": 235,
+      "finetuned": 260
+    },
+    "app_model_changed": false,
+    "selection": "best validation checkpoint, frozen before test",
+    "limitations": [
+      "Public OCR pretraining overlap unknown",
+      "Currency and expense category accuracy unmeasured",
+      "Item-row accuracy unmeasured",
+      "Missing and noisy receipt labels",
+      "Concurrent CPU runs do not establish production latency"
+    ],
+    "manifest_sha256": "1e45aafb648e2bb44e28208a05a05b941e7a45dd321ac3d2d8f17e5ff3717611",
+    "rule_sha256": "dd2ef158aecb5bee03e7f845c00380fb6d734eef7762e999ae348c3cf0251751"
+  },
+  "data_audit": {
+    "seed": 42,
+    "adapter_version": 1,
+    "sources": {
+      "cord": {
+        "counts": {
+          "train": 800,
+          "validation": 100,
+          "test": 100
+        },
+        "fingerprints": {
+          "train": "2e1636c6d1c40cb5",
+          "validation": "ab0a016fd1f19616",
+          "test": "cfc4c7545442353f"
+        }
+      },
+      "sroie": {
+        "counts": {
+          "train": 626,
+          "test": 361
+        },
+        "fingerprints": {
+          "train": "56059e26eabed5d1",
+          "test": "f075013c760d462b"
+        }
+      }
+    },
+    "excluded": [
+      {
+        "id": "sroie:train:223",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:452",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "cord:train:109",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "cord:train:285",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:15",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:18",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:73",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:80",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:224",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:234",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:238",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:240",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:453",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:624",
+        "reason": "duplicate_image"
+      },
+      {
+        "id": "sroie:train:625",
+        "reason": "duplicate_image"
+      }
+    ],
+    "prepared_counts": {
+      "train": 1286,
+      "validation": 225,
+      "test": 461
+    },
+    "training_label_coverage": {
+      "cord.merchant.unlabeled": 798,
+      "cord.date.unlabeled": 798,
+      "cord.total.labeled": 731,
+      "cord.currency.unlabeled": 798,
+      "cord.tax.labeled": 332,
+      "cord.tax.unlabeled": 443,
+      "cord.total.ambiguous": 48,
+      "cord.total.unlabeled": 19,
+      "cord.tax.ambiguous": 23,
+      "sroie.merchant.labeled": 488,
+      "sroie.date.labeled": 261,
+      "sroie.total.labeled": 405,
+      "sroie.currency.unlabeled": 488,
+      "sroie.tax.unlabeled": 488,
+      "sroie.date.ambiguous": 227,
+      "sroie.total.ambiguous": 82,
+      "sroie.total.unlabeled": 1
+    },
+    "limitations": [
+      "Byte-hash deduplication only; near-duplicate/layout audit pending",
+      "Ambiguous dates and CORD multi-section tax excluded from supervision",
+      "Currency requires new verified labels",
+      "Images not all decoded for corruption audit"
+    ]
+  },
+  "ocr_latency_seconds": {
+    "baseline": {
+      "n": 461,
+      "p50": 3.0772079000016674,
+      "p95": 7.291713300000993,
+      "p99": 8.928046999997605
+    },
+    "finetuned": {
+      "n": 461,
+      "p50": 3.1673164999992878,
+      "p95": 7.219675399999687,
+      "p99": 8.827661999999691
+    }
+  },
+  "latency_scope": "Historical Windows CPU OCR runs with two threads per model and MKL-DNN. Models ran concurrently and resumed from cached predictions after a file-lock interruption. Includes image hash/read, predict and output conversion. Excludes model initialization, upload, queue, field parsing, database, API response and human review. Hardware and competing load were not recorded. Not production latency or a speed comparison.",
+  "cost_per_task": {
+    "measured_usd": null,
+    "reason": "No billing-period infrastructure costs or matching completed-task count available.",
+    "formula": "(worker + API + database/storage + network costs for one period) / completed receipt extractions in that period",
+    "includes": "Idle worker capacity, failed attempts and retries must remain in the cost numerator. Training and human-review costs must be disclosed separately."
+  },
+  "demo_check": {
+    "date": "2026-11-05",
+    "url": "https://spendsense-ivory.vercel.app",
+    "homepage_status": 200,
+    "health_status": 200,
+    "extraction": "paddleocr_available",
+    "google_login_tested": false
+  },
+  "observations_sha256": "5a17d3a44e5bc9ee50448e36a5ec9dc25f65fcd061e78c18cb8ac21f757f18ff",
+  "documentation_checks": {
+    "date": "2026-11-05",
+    "python_tests_passed": 70,
+    "python_test_note": "61 passed in full run; 9 integration tests skipped initially, then all 9 passed with local MongoDB.",
+    "frontend_tests_passed": 6,
+    "frontend_build": "passed; existing chunk-size warning",
+    "test_manifest_recreated_exactly": true,
+    "fine_tuned_inference_rerun": false,
+    "fresh_checkout_install_tested": false
+  }
+}

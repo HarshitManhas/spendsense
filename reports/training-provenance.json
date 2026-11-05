@@ -1,0 +1,76 @@
+{
+  "upstream_commit": "b03f46425e8ff4442b268ce449e3eef758146cd4",
+  "pretrained_sha256": "e25c9536f39791dfbd2f005f7e0fbbc2652d35b79bae999740059d93fec8e950",
+  "dataset": {
+    "max_length": 64,
+    "dictionary_sha256": "8459e5659185f87d62195cb495f2677493bade134182bfb8c54bf21757b28cdf",
+    "test_used": false,
+    "label_source": "human dataset annotations, not OCR pseudo-labels",
+    "splits": {
+      "validation": {
+        "receipts": 225,
+        "crops": 8194,
+        "sources": {
+          "cord": 1618,
+          "sroie": 6576
+        },
+        "skipped": {
+          "duplicate_crop": 12,
+          "long_label": 2
+        },
+        "unsupported_characters": {},
+        "manifest_sha256": "d1c760bc32c1a7b32193c73d49585090cd0746b2a993f8303825b942a5d88e93",
+        "labels_sha256": "53cb16c9965eca5d9aa158369231400a86fb55d7a7ddf59e1eddcf3ed57bccaa"
+      },
+      "train": {
+        "receipts": 1286,
+        "crops": 40268,
+        "sources": {
+          "cord": 13851,
+          "sroie": 26417
+        },
+        "skipped": {
+          "duplicate_crop": 445,
+          "invalid_label": 1
+        },
+        "unsupported_characters": {},
+        "manifest_sha256": "c158fdb5a0adf121cde94bcb99e2e1b0e470029731f89d8a60e2f077ce080b47",
+        "labels_sha256": "e0bbdd81346af14656eb540853a7f69567265f5c0f700c66df6d912bfed7c76c"
+      }
+    }
+  },
+  "currency_data": {
+    "synthetic_only": true,
+    "split": "disjoint font families and random seeds",
+    "splits": {
+      "train": {
+        "samples": 4000,
+        "seed": 871,
+        "fonts": {
+          "arial.ttf": "edfbd22a3d088fc2f5d7c79b8c9c732df6dc878a60f0a80be0f92a3c7a634404",
+          "arialbd.ttf": "4d59199834e7439c67ea4949407639961060b21b173833f566eb60ac6fd8f5af",
+          "times.ttf": "0bf1b21b27b370039b60eca23d532c3fe3fb308750d8f13816db70a6cb666804",
+          "timesbd.ttf": "cb8f85dedb0ab01792baad20da28d26773485ac9c21e112bb5c511a8b2001eee",
+          "calibri.ttf": "57e93ff143572bcc092c1f56202d43ddc07bb119aa104c6d7af163470fb551f6",
+          "calibrib.ttf": "0a8296747536ead27d5f48f67e911cc3b207742b3f704e66995251d12fd422e5",
+          "segoeui.ttf": "704eada12961a27fd271f7d3b09e2066520e758390c1776744eff430fee30f6e"
+        },
+        "labels_sha256": "1c1eb8d583f29c9ad03ff4e32bbc8db1f546afd25d3287892b4f445af5b7b652"
+      },
+      "validation": {
+        "samples": 600,
+        "seed": 872,
+        "fonts": {
+          "cour.ttf": "e4a66a0259718d0c8f4b6e14319b4803ced45afbddf3abba8b8c3e2006856206",
+          "verdana.ttf": "6a8481fe107ee547893c018b13dba291c2020bec3de5da6525d9ac09f6bc2105",
+          "tahoma.ttf": "9af03d4ad44a3b413d92f7de48b94aa7cc8a1471a75d498406eae837f62ee1d1",
+          "consola.ttf": "cf00b507b3286870cc5064ebd0633c303f70b491a4af25eec2d32df413db0179"
+        },
+        "labels_sha256": "0f3e786b2263bd5fb359d9ce7a772d99755a14b87220e11c4e804626f8f38c54"
+      }
+    }
+  },
+  "config_sha256": "5b466b7ffcde94cd46d7abaee674ac12797a1961e900aaab38489b726c49f0d4",
+  "test_used": false,
+  "app_model_changed": false
+}
